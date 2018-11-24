@@ -6,9 +6,8 @@ import akka.actor.ActorSystem
 import akka.persistence.PersistentRepr
 import akka.persistence.dynamodb.journal
 import akka.persistence.journal.Tagged
-import akka.persistence.query.{EventEnvelope, NoOffset, Offset, Sequence}
+import akka.persistence.query.{NoOffset, Sequence}
 import akka.serialization.Serialization
-import akka.stream.QueueOfferResult
 import akka.util.ByteString
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB
 import com.amazonaws.services.dynamodbv2.streamsadapter.model.RecordAdapter
@@ -16,7 +15,6 @@ import com.amazonaws.services.kinesis.clientlibrary.interfaces.{IRecordProcessor
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
 import com.amazonaws.services.kinesis.model.Record
 import com.lightbend.lagom.internal.persistence.dynamodb.DynamoDBPersistenceConfig
-import com.lightbend.lagom.internal.persistence.dynamodb.stream.DynamoDBAkkaPersistenceEventsProvider.OffsetQueuePair
 import com.lightbend.lagom.internal.scaladsl.persistence.PersistentEntityActor.EntityIdSeparator
 import org.slf4j.LoggerFactory
 
@@ -25,7 +23,12 @@ import scala.collection.immutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 
-private[stream] class DynamoDBStreamActorEventsRecordProcessor(dynamoDBClient: AmazonDynamoDB, serializer: Serialization, system: ActorSystem) extends IRecordProcessor {
+private[stream] class DynamoDBStreamActorEventsRecordProcessor(
+                                                                dynamoDBClient: AmazonDynamoDB,
+                                                                serializer: Serialization,
+                                                                system: ActorSystem,
+                                                                eventsProvider: DynamoDBAkkaPersistenceEventsProviderActor
+                                                              ) extends IRecordProcessor {
 
   private val log = LoggerFactory.getLogger(getClass)
   private val handleOnlyMaxInChunks = DynamoDBPersistenceConfig.readSideProcessOnlyMaxByOffset(system)
@@ -42,83 +45,54 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(dynamoDBClient: A
         .filter(_.getInternalObject.getDynamodb.getNewImage.contains(journal.Key))
         .filter(_.getInternalObject.getDynamodb.getNewImage.get(journal.Key).getS.contains(EntityIdSeparator))
 
-      val readyForIngestion: Seq[RecordTagEventEnvelopData] = toReadyForIngestionRecords(journalRecords)
+      val readyForIngestion: Seq[RecordData] = toReadyForIngestionRecords(journalRecords)
       val filteredHavingConsumers: Seq[ReadyForIngestionRecord] = toReadyForIngestionByConsumerAndOffset(readyForIngestion)
       val filtered: Seq[ReadyForIngestionRecord] = toReadyForIngestionByMaxOffset(filteredHavingConsumers)
 
-      filtered.foreach(
-        item => {
-          val sourceQueueWithComplete = item.offsetQueuePair._2
-          val eventEnvelope = item.recordData.eventEnvelope
-          val dynamoDBRecord = item.recordData.recordAdapter
-          val tag = item.recordData.tag
-          val dynamoRecordOffset = eventEnvelope.offset
-          // with recommended design for read side to react only on last in chunk, this blocking is not a big deal
-          // https://stackoverflow.com/questions/44202074/akka-stream-source-queue-hangs-when-using-fail-overflow-strategy
-          Try {
-            Await.result(sourceQueueWithComplete.offer(eventEnvelope), recordIngestionTimeout) match {
-              case QueueOfferResult.Dropped => throw new IllegalStateException(s"ignore all next elements in chunk of dynamoDB Stream elements as dropped offered element : $dynamoDBRecord ")
-              case QueueOfferResult.QueueClosed => throw new IllegalStateException(s"ignore all next elements in chunk of dynamoDB Stream elements as stream was completed during future was active : $dynamoDBRecord ")
-              case QueueOfferResult.Failure(f) => throw new IllegalStateException(s"ignore all next elements in chunk of dynamoDB Stream elements as failed to offer element :$dynamoDBRecord  cause: $f")
-              case QueueOfferResult.Enqueued => DynamoDBAkkaPersistenceEventsProvider.updateOffsetForTag(tag, dynamoRecordOffset)
-            }
-          } match {
-            case Success(_) => log.info(s"Success complete read side data ingestion for record $eventEnvelope")
-            case Failure(exception) =>
-              log.error(s"Failed complete read side data ingestion for record $eventEnvelope , Exception ${exception.getMessage}")
-              throw exception
-          }
+      filtered.foreach(item => {
+        // with recommended design for read side to react only on last in chunk, this blocking is not a big deal
+        Try {
+          Await.result(eventsProvider.handleEvent(item), recordIngestionTimeout)
+        } match {
+          case Success(_) => log.info(s"Success complete read side data ingestion for record ${item.recordData.recordAdapter}")
+          case Failure(exception) =>
+            log.error(s"Failed complete read side data ingestion for record ${item.recordData.recordAdapter} , Exception ${exception.getMessage}")
+            throw exception
         }
-      )
+      })
       Try(checkpointer.checkpoint(dynamoRecords.reverse.head))
     }
   }
 
-  private def toReadyForIngestionRecords(journalRecords: immutable.Seq[RecordAdapter]): Seq[RecordTagEventEnvelopData] = {
+  private def toReadyForIngestionRecords(journalRecords: immutable.Seq[RecordAdapter]): Seq[RecordData] = {
     val (parseableRecords, notParseableRecords) = journalRecords
       .map(record => (record, toTagEventData(record)))
-      .partition(_._2.isDefined)
+      .partition(_._2.isRight)
     if (notParseableRecords.nonEmpty) log.error(s"Ignore DynamoDB records as parse error, we don't retry as this mostly failed again. Records: $notParseableRecords")
-    parseableRecords.map(_._2.get)
+    parseableRecords.map(_._2.right.get)
   }
 
-  private def toReadyForIngestionByConsumerAndOffset(records: Seq[RecordTagEventEnvelopData]): Seq[ReadyForIngestionRecord] = {
-    def matchByOffset(fromOffset: Offset, recordOffset: Offset): Boolean = {
-      (fromOffset, recordOffset) match {
-        case (NoOffset, _) => true
-        case (Sequence(from), Sequence(actual)) => from < actual
-        case _ => false
-      }
-    }
-
-    val (recordsWithConsumersOpt, noConsumerRecords) = records
-      .map(r => (r, DynamoDBAkkaPersistenceEventsProvider.getOffsetQueuePairByTag(r.tag)))
+  private def toReadyForIngestionByConsumerAndOffset(records: Seq[RecordData]): Seq[ReadyForIngestionRecord] = {
+    val (consumersForRecord, noConsumerRecords) = records
+      .map(r => (r, eventsProvider.getConsumerActorByEventTag(r.tag)))
       .partition(_._2.isDefined)
     if (noConsumerRecords.nonEmpty) log.error(s"Ignore DynamoDB records as no appropriate tag consumers. Records: $noConsumerRecords")
 
-    val recordsWithConsumers = recordsWithConsumersOpt
-      .map { case (recordTagEventEnvelopData, offsetQueuePairOpt) => (recordTagEventEnvelopData, offsetQueuePairOpt.get) }
-
-    val (validByOffset, notValidByOffset) = recordsWithConsumers
-      .partition(item => matchByOffset(fromOffset = item._2._1, recordOffset = item._1.eventEnvelope.offset))
+    val (validByOffset, notValidByOffset) = consumersForRecord
+      .partition(item => {
+        val recordOffset = item._1.offset
+        val tagOffsetConsumers = item._2
+        tagOffsetConsumers.exists(tagOffset => eventsProvider.matchByOffset(fromOffset = tagOffset.sequenceOffsetOpt.getOrElse(NoOffset), recordOffset = recordOffset))
+      })
     if (notValidByOffset.nonEmpty) log.warn(s"Ignore DynamoDB records as late events by already processed offset. Records: $notValidByOffset")
 
-    validByOffset.map(item => ReadyForIngestionRecord(item._1, item._2))
+    validByOffset.map(item => ReadyForIngestionRecord(item._1, item._2.get))
   }
 
   private def toReadyForIngestionByMaxOffset(records: Seq[ReadyForIngestionRecord]): Seq[ReadyForIngestionRecord] = {
     if (!handleOnlyMaxInChunks) records
     else {
-      def max(r1: ReadyForIngestionRecord, r2: ReadyForIngestionRecord): ReadyForIngestionRecord = {
-        val r1Offset = r1.recordData.eventEnvelope.offset
-        val r2Offset = r2.recordData.eventEnvelope.offset
-        (r1Offset, r2Offset) match {
-          case (NoOffset, NoOffset) => r1
-          case (Sequence(_), NoOffset) => r1
-          case (NoOffset, Sequence(_)) => r2
-          case (Sequence(r1Seq), Sequence(r2Seq)) => if (r2Seq.compareTo(r1Seq) > 0) r2 else r1
-        }
-      }
+      def max(r1: ReadyForIngestionRecord, r2: ReadyForIngestionRecord): ReadyForIngestionRecord = if (r2.recordData.offset.compareTo(r1.recordData.offset) > 0) r2 else r1
       val mMap = new util.LinkedHashMap[String, ReadyForIngestionRecord]()
       for (record <- records) {
         val key = record.recordData.tag
@@ -137,25 +111,29 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(dynamoDBClient: A
     if (reason eq ShutdownReason.TERMINATE) Try(checkpointer.checkpoint())
   }
 
-  private def toTagEventData(recordAdapter: RecordAdapter): Option[RecordTagEventEnvelopData] = {
-    Try {
+  private def toTagEventData(recordAdapter: RecordAdapter): Either[Throwable, RecordData] = {
+    try {
       val newEvent = recordAdapter.getInternalObject.getDynamodb.getNewImage
       val persistentRepr = serializer.deserialize(ByteString(newEvent.get(journal.Payload).getB).toArray, classOf[PersistentRepr]).get
       val seqNumber = persistentRepr.sequenceNr
       val offset = Sequence(Try(recordAdapter.getSequenceNumber.toLong).getOrElse(0L))
       val tagged = persistentRepr.payload.asInstanceOf[Tagged]
-      RecordTagEventEnvelopData(recordAdapter,
-        tagged.tags.head,
-        EventEnvelope(
+      Right(
+        RecordData(
+          recordAdapter,
+          tagged.tags.head,
           offset = offset,
           persistenceId = persistentRepr.persistenceId,
           sequenceNr = seqNumber,
-          event = tagged.payload)
+          serializedTaggedEventBytes = serializer.serialize(tagged).get
+        )
       )
-    }.toOption
+    } catch {
+      case ex: Throwable => Left(ex)
+    }
   }
 }
 
-case class DynamoDBTryRecordResult(record: RecordAdapter)
-case class RecordTagEventEnvelopData(recordAdapter: RecordAdapter, tag: String, eventEnvelope: EventEnvelope)
-case class ReadyForIngestionRecord(recordData: RecordTagEventEnvelopData, offsetQueuePair: OffsetQueuePair)
+private[stream] case class DynamoDBTryRecordResult(record: RecordAdapter)
+private[stream] case class RecordData(recordAdapter: RecordAdapter, tag: String, offset: Sequence, persistenceId: String, sequenceNr: Long, serializedTaggedEventBytes: Array[Byte])
+private[stream] case class ReadyForIngestionRecord(recordData: RecordData, consumer: TagByOffsetConsumerActor)

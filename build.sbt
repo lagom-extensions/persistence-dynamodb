@@ -40,7 +40,6 @@ lazy val root = (project in file("."))
       "com.gu"                   %% "scanamo-alpakka"                 % "1.0.0-M7",
       "com.amazonaws"            % "dynamodb-streams-kinesis-adapter" % "1.4.0",
       "com.typesafe.akka"        %% "akka-persistence-dynamodb"       % "1.1.1",
-      "com.github.romix.akka"    %% "akka-kryo-serialization"         % "0.5.2",
       "org.slf4j"                % "slf4j-api"                        % "1.7.25",
       "org.slf4j"                % "slf4j-simple"                     % "1.7.25",
       "org.scalatest"            %% "scalatest"                       % "3.0.0" % "test"

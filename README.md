@@ -3,6 +3,11 @@
 ##### Lagom contribution
 Main goal to continue evolution as part of Lagom framework and supported by community
 
+##### Approximate DynamoDB cost
+This is extremely high in payment. We do a check with 4200RPS and got ~ 4300$/month DynamoDB price.
+So if your team think that this is cheaper than Cassandra support or any AWS RDS solution, they are wrong.
+Choice is yours
+
 ##### Library dependencies used
 - Alpakka DynamoDB
 - Scanamo
@@ -39,3 +44,9 @@ Then it will be very efficient to allow persist only one max by sequence event f
 ##### 5. Small duplication in configuration
 This comes because of inconsistency between 
 akka-persistence-dynamodb and alpakka-dynamodb
+
+#### Suggested next enhancements:
+It seems that this can be simplified if go with polling/sleeping/notification approach, something similar to what exists in Cassandra Journal
+
+#### Code structure and quality
+A lot of code comes in a similar approach to all read side processors integration, so most left without any refactoring

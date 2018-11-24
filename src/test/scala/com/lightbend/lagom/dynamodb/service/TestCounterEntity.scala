@@ -6,7 +6,7 @@ import akka.persistence.journal.Tagged
 import com.lightbend.lagom.scaladsl.persistence.PersistentEntity.ReplyType
 import com.lightbend.lagom.scaladsl.persistence.{AggregateEvent, AggregateEventTag, PersistentEntity}
 import com.lightbend.lagom.scaladsl.playjson.{JsonSerializer, JsonSerializerRegistry}
-import play.api.libs.json.{Format, Json}
+import play.api.libs.json._
 
 class TestCounterEntity extends PersistentEntity {
   override type Command = TestCounterCommand
@@ -19,8 +19,8 @@ class TestCounterEntity extends PersistentEntity {
 
   override def behavior: Behavior =
     Actions()
-      .onCommand[TestIncrementTestCounterCmd, TestCounterState] {
-        case (TestIncrementTestCounterCmd(amount), ctx, state) =>
+      .onCommand[TestIncrementCounterCmd, TestCounterState] {
+        case (TestIncrementCounterCmd(amount), ctx, state) =>
           ctx.thenPersist(
             TestCounterUpdatedEvent(
               amount.bigDecimal,
@@ -52,9 +52,17 @@ class TestCounterEntity extends PersistentEntity {
       }
 }
 
-sealed trait TestCounterCommand extends TestRemoting
-case class TestIncrementTestCounterCmd(amount: BigDecimal) extends TestCounterCommand with ReplyType[TestCounterState]
+sealed trait TestCounterCommand
+case class TestIncrementCounterCmd(amount: BigDecimal) extends TestCounterCommand with ReplyType[TestCounterState]
+object TestIncrementCounterCmd {
+  implicit val format: Format[TestIncrementCounterCmd] = Json.format
+}
+
 case class TestGetCounterStateCmd() extends TestCounterCommand with ReplyType[TestCounterState]
+object TestGetCounterStateCmd {
+  implicit val strictReads = Reads[TestGetCounterStateCmd](json => json.validate[JsObject].filter(_.values.isEmpty).map(_ => TestGetCounterStateCmd()))
+  implicit val writes = OWrites[TestGetCounterStateCmd](_ => Json.obj())
+}
 
 sealed trait TestCounterEvent extends AggregateEvent[TestCounterEvent] {
   override def aggregateTag = TestCounterEvent.Tag
@@ -70,5 +78,5 @@ object TestCounterUpdatedEvent {
 }
 
 object TestCounterSerializerRegistry extends JsonSerializerRegistry {
-  override def serializers = List(JsonSerializer[TestCounterUpdatedEvent])
+  override def serializers = List(JsonSerializer[TestCounterState], JsonSerializer[TestIncrementCounterCmd], JsonSerializer[TestGetCounterStateCmd], JsonSerializer[TestCounterUpdatedEvent])
 }

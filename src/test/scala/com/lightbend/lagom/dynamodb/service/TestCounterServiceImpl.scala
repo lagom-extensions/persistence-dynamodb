@@ -13,7 +13,7 @@ class TestCounterServiceImpl(
 )(implicit ec: ExecutionContext)
     extends TestCounterService {
   override def incrementCounter: ServiceCall[TestIncrementCounter, TestCounterState] = ServiceCall { incrementCmd =>
-    refFor(incrementCmd.counter).ask(TestIncrementTestCounterCmd(incrementCmd.amount))
+    refFor(incrementCmd.counter).ask(TestIncrementCounterCmd(incrementCmd.amount))
   }
 
   override def getCounterState(counterName: String) = ServiceCall { _ => refFor(counterName).ask(TestGetCounterStateCmd())

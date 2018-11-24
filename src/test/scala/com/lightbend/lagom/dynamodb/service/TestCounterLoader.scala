@@ -25,7 +25,6 @@ trait TestCounterComponents extends LagomServerComponents with DynamoDBPersisten
   lazy val counterEventProcessor = wire[CounterEventProcessor]
   readSide.register(counterEventProcessor)
   persistentEntityRegistry.register(wire[TestCounterEntity])
-  override lazy val readSideTags = TestCounterEvent.Tag.allTags.map(_.tag)
 }
 
 abstract class TestCounterApplication(context: LagomApplicationContext)

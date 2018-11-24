@@ -19,22 +19,22 @@ trait TestCounterService extends Service {
   }
 }
 
-case class TestIncrementCounter(counter: String, amount: BigDecimal) extends TestRemoting
+case class TestIncrementCounter(counter: String, amount: BigDecimal)
 object TestIncrementCounter {
   implicit val format: Format[TestIncrementCounter] = Json.format
 }
 
-case class TestGetCounterState(counter: String) extends TestRemoting
+case class TestGetCounterState(counter: String)
 object TestGetCounterState {
   implicit val format: Format[TestGetCounterState] = Json.format
 }
 
-case class TestCounterState(counter: String, amount: BigDecimal) extends TestRemoting
+case class TestCounterState(counter: String, amount: BigDecimal)
 object TestCounterState {
   implicit val format: Format[TestCounterState] = Json.format
 }
 
-case class TestCounterStatistic(counterData: Seq[TestCounterState]) extends TestRemoting
+case class TestCounterStatistic(counterData: Seq[TestCounterState])
 object TestCounterStatistic {
   implicit val format: Format[TestCounterStatistic] = Json.format
 }

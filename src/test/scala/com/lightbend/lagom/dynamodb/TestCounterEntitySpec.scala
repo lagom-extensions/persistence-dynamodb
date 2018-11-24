@@ -43,7 +43,7 @@ class TestCounterEntitySpec
 
   "The counter entity " should {
     "increment counter that don't have previous state" in withDriver { driver =>
-      val outcome = driver.run(TestIncrementTestCounterCmd(BigDecimal(1.11)))
+      val outcome = driver.run(TestIncrementCounterCmd(BigDecimal(1.11)))
       outcome.events should contain only TestCounterUpdatedEvent(
         BigDecimal(1.11),
         sZERO,
@@ -53,8 +53,8 @@ class TestCounterEntitySpec
     }
 
     "increment counter that already have state" in withDriver { driver =>
-      val initOut = driver.run(TestIncrementTestCounterCmd(BigDecimal(1.11)))
-      val outcome = driver.run(TestIncrementTestCounterCmd(BigDecimal(1.11)))
+      val initOut = driver.run(TestIncrementCounterCmd(BigDecimal(1.11)))
+      val outcome = driver.run(TestIncrementCounterCmd(BigDecimal(1.11)))
       outcome.events should contain only TestCounterUpdatedEvent(
         BigDecimal(1.11),
         sZERO,
@@ -70,7 +70,7 @@ class TestCounterEntitySpec
     }
 
     "response with state value" in withDriver { driver =>
-      val initOut = driver.run(TestIncrementTestCounterCmd(BigDecimal(1.11)))
+      val initOut = driver.run(TestIncrementCounterCmd(BigDecimal(1.11)))
       val outcome = driver.run(TestGetCounterStateCmd())
       outcome.events should ===(Nil)
       outcome.state should ===(Some(BigDecimal(1.11)))
