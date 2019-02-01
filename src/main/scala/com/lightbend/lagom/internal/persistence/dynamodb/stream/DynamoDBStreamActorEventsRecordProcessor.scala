@@ -9,7 +9,6 @@ import akka.persistence.journal.Tagged
 import akka.persistence.query.{NoOffset, Sequence}
 import akka.serialization.Serialization
 import akka.util.ByteString
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB
 import com.amazonaws.services.dynamodbv2.streamsadapter.model.RecordAdapter
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.{IRecordProcessor, IRecordProcessorCheckpointer}
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.ShutdownReason
@@ -18,17 +17,16 @@ import com.lightbend.lagom.internal.persistence.dynamodb.DynamoDBPersistenceConf
 import com.lightbend.lagom.internal.scaladsl.persistence.PersistentEntityActor.EntityIdSeparator
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 
 private[stream] class DynamoDBStreamActorEventsRecordProcessor(
-                                                                dynamoDBClient: AmazonDynamoDB,
-                                                                serializer: Serialization,
-                                                                system: ActorSystem,
-                                                                eventsProvider: DynamoDBAkkaPersistenceEventsProviderActor
-                                                              ) extends IRecordProcessor {
+    serializer: Serialization,
+    system: ActorSystem,
+    eventsProvider: DynamoDBAkkaPersistenceEventsProviderActor
+) extends IRecordProcessor {
 
   private val log = LoggerFactory.getLogger(getClass)
   private val handleOnlyMaxInChunks = DynamoDBPersistenceConfig.readSideProcessOnlyMaxByOffset(system)
@@ -37,12 +35,12 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(
   override def initialize(shardId: String): Unit = {}
 
   override def processRecords(dynamoRecords: util.List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {
-    if (dynamoRecords.nonEmpty) {
-      val journalRecords: immutable.Seq[RecordAdapter] = dynamoRecords.toList
+    if (dynamoRecords != null && dynamoRecords.size() > 0) {
+      val journalRecords: immutable.Seq[RecordAdapter] = dynamoRecords.asScala.toList
         .filter(_.isInstanceOf[RecordAdapter])
         .map(_.asInstanceOf[RecordAdapter])
         .filter(_.getInternalObject.getEventName == "INSERT")
-        .filter(_.getInternalObject.getDynamodb.getNewImage.contains(journal.Key))
+        .filter(_.getInternalObject.getDynamodb.getNewImage.containsKey(journal.Key))
         .filter(_.getInternalObject.getDynamodb.getNewImage.get(journal.Key).getS.contains(EntityIdSeparator))
 
       val readyForIngestion: Seq[RecordData] = toReadyForIngestionRecords(journalRecords)
@@ -60,7 +58,8 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(
             throw exception
         }
       })
-      Try(checkpointer.checkpoint(dynamoRecords.reverse.head))
+      Try(checkpointer.checkpoint(dynamoRecords.asScala.last))
+      ()
     }
   }
 
@@ -96,19 +95,19 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(
       val mMap = new util.LinkedHashMap[String, ReadyForIngestionRecord]()
       for (record <- records) {
         val key = record.recordData.tag
-        val curRecord = mMap.get(key, record)
+        val curRecord = mMap.get(key)
         if (curRecord == null) {
           mMap.put(key, record)
         } else {
           mMap.put(key, max(curRecord, record))
         }
       }
-      mMap.values().toList
+      mMap.values().asScala.toSeq
     }
   }
 
   override def shutdown(checkpointer: IRecordProcessorCheckpointer, reason: ShutdownReason): Unit = {
-    if (reason eq ShutdownReason.TERMINATE) Try(checkpointer.checkpoint())
+    if (reason eq ShutdownReason.TERMINATE) { Try(checkpointer.checkpoint()); () }
   }
 
   private def toTagEventData(recordAdapter: RecordAdapter): Either[Throwable, RecordData] = {
@@ -135,5 +134,12 @@ private[stream] class DynamoDBStreamActorEventsRecordProcessor(
 }
 
 private[stream] case class DynamoDBTryRecordResult(record: RecordAdapter)
-private[stream] case class RecordData(recordAdapter: RecordAdapter, tag: String, offset: Sequence, persistenceId: String, sequenceNr: Long, serializedTaggedEventBytes: Array[Byte])
+private[stream] case class RecordData(
+    recordAdapter: RecordAdapter,
+    tag: String,
+    offset: Sequence,
+    persistenceId: String,
+    sequenceNr: Long,
+    serializedTaggedEventBytes: Array[Byte]
+)
 private[stream] case class ReadyForIngestionRecord(recordData: RecordData, consumer: TagByOffsetConsumerActor)

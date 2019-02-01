@@ -98,13 +98,13 @@ class TestCounterServiceITest extends AsyncWordSpec with BeforeAndAfterAll with 
 
     def doCheck(): Future[T] = {
       block.recoverWith {
-        case recheck if checkUntil > System.currentTimeMillis() =>
+        case _ if checkUntil > System.currentTimeMillis() =>
           val timeout = Promise[T]()
           actorSystem.scheduler.scheduleOnce(checkEvery) {
             timeout.completeWith(doCheck())
           }(actorSystem.dispatcher)
           timeout.future
-        case recheckTimeFailed =>
+        case _ =>
           throw new AssertionError("failed await success")
       }
     }

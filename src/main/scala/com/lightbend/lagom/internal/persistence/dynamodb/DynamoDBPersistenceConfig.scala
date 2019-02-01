@@ -21,7 +21,7 @@ private[lagom] object DynamoDBPersistenceConfig {
     FiniteDuration(system.settings.config.getDuration("lagom.persistence.read-side.dynamodb.await-ingestion-timeout", TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   def fetchDynamoDBMaxRecords(implicit system: ActorSystem): Int = system.settings.config.getInt("lagom.persistence.dynamodb.fetch-max-records")
   def dynamoDBTagConsumerQueueBufferSize(implicit system: ActorSystem): Int = system.settings.config.getInt("lagom.persistence.dynamodb.tag-consumer-queue-buffer-size")
-  def idleTimeBetweenReadsMills(implicit system: ActorSystem): Int = system.settings.config.getInt("lagom.persistence.dynamodb.idle-time-between-reads-mills")
+  def idleTimeBetweenReadsMills(implicit system: ActorSystem): Long = system.settings.config.getLong("lagom.persistence.dynamodb.idle-time-between-reads-mills")
 
   def cloudWatchEndpoint(implicit system: ActorSystem): String = system.settings.config.getString("lagom.persistence.dynamodb.cloud-watch.endpoint")
   def cloudWatchRegion(implicit system: ActorSystem): String = system.settings.config.getString("lagom.persistence.dynamodb.cloud-watch.region")
@@ -30,15 +30,19 @@ private[lagom] object DynamoDBPersistenceConfig {
   def journalStreamTableEndpoint(implicit system: ActorSystem): String = {
     val streamEndpoint = system.settings.config.getString("lagom.persistence.read-side.dynamodb.journal-table-stream-endpoint")
     if (streamEndpoint.nonEmpty) streamEndpoint
-    else persistenceConfig(JOURNAL_PLUGIN_CONFIG).getString("endpoint")
+    else {
+      val journalConf = persistenceConfig(JOURNAL_PLUGIN_CONFIG)
+      if(journalConf.hasPath("stream-endpoint")) journalConf.getString("stream-endpoint")
+      else journalConf.getString("endpoint")
+    }
   }
   def journalTableName(implicit system: ActorSystem): String = persistenceConfig(JOURNAL_PLUGIN_CONFIG).getString("journal-table")
-  def journalReadCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getInt("lagom.persistence.dynamodb.table.journal.read-capacity-units")
-  def journalWriteCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getInt("lagom.persistence.dynamodb.table.journal.write-capacity-units")
+  def journalReadCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getLong("lagom.persistence.dynamodb.table.journal.read-capacity-units")
+  def journalWriteCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getLong("lagom.persistence.dynamodb.table.journal.write-capacity-units")
 
   def snapshotTableName(implicit system: ActorSystem): String = persistenceConfig(SNAPSHOT_PLUGIN_CONFIG).getString("snapshot-table")
-  def snapshotReadCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getInt("lagom.persistence.dynamodb.table.snapshot.read-capacity-units")
-  def snapshotWriteCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getInt("lagom.persistence.dynamodb.table.snapshot.write-capacity-units")
+  def snapshotReadCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getLong("lagom.persistence.dynamodb.table.snapshot.read-capacity-units")
+  def snapshotWriteCapacityUnits(implicit system: ActorSystem): Long = system.settings.config.getLong("lagom.persistence.dynamodb.table.snapshot.write-capacity-units")
 
   private def persistenceConfig(confType: AkkaPersistenceConfig)(implicit system: ActorSystem): Config = {
     val config = system.settings.config

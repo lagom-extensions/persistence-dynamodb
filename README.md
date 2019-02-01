@@ -16,6 +16,12 @@ Choice is yours
 
 ##### AWS infrastructure emulation
 - localstack
+- ensure AWS credential variables are set as bash profile(sbt envVars just don't applied in Intellij seldom test run)
+```bash
+export AWS_ACCESS_KEY_ID=dummy-access-key
+export AWS_SECRET_KEY=dummy-secret-key
+export AWS_REGION=eu-west-1
+```
 - Open terminal and run all infrastructure under Docker. On macos TMPDIR=/private$TMPDIR docker-compose up
 ```bash
 docker-compose up

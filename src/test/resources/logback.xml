@@ -10,6 +10,7 @@
     <logger name="akka" level="ERROR"/>
     <logger name="com.lightbend.lagom" level="DEBUG"/>
     <logger name="akka.persistence.dynamodb" level="DEBUG"/>
+    <logger name="com.amazonaws" level="WARN"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

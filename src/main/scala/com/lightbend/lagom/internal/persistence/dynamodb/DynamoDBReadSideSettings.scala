@@ -11,6 +11,6 @@ private[lagom] class DynamoDBReadSideSettings @Inject() (system: ActorSystem) {
 
   val autoCreateTables: Boolean = dynamoDBConfig.getBoolean("tables-autocreate")
   val offsetStoreTableName: String = dynamoDBConfig.getString("offset-store.table-name")
-  val offsetStoreReadCapacityUnits: Long = dynamoDBConfig.getInt("offset-store.read-capacity-units")
-  val offsetStoreWriteCapacityUnits: Long = dynamoDBConfig.getInt("offset-store.write-capacity-units")
+  val offsetStoreReadCapacityUnits: Long = dynamoDBConfig.getLong("offset-store.read-capacity-units")
+  val offsetStoreWriteCapacityUnits: Long = dynamoDBConfig.getLong("offset-store.write-capacity-units")
 }

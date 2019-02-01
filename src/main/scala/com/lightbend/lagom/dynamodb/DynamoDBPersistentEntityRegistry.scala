@@ -3,7 +3,6 @@ package com.lightbend.lagom.dynamodb
 import akka.Done
 import akka.actor.{ActorSystem, Terminated}
 import akka.persistence.dynamodb.{journal, snapshot}
-import akka.stream.Materializer
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoClient
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoImplicits.{CreateTable, DescribeTable}
 import com.amazonaws.services.dynamodbv2.model._
@@ -12,6 +11,7 @@ import com.lightbend.lagom.internal.persistence.dynamodb.{DynamoDBReadJournal, D
 import com.lightbend.lagom.internal.scaladsl.persistence.AbstractPersistentEntityRegistry
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 /**
   * Internal API
@@ -19,7 +19,7 @@ import scala.concurrent.{ExecutionContext, Future}
 private[lagom] final class DynamoDBPersistentEntityRegistry(dynamoClient: DynamoClient,
                                                             dynamoDBWriteSideSettings: DynamoDBWriteSideSettings,
                                                             readSideStreamEnabled: Boolean)
-                                                           (implicit system: ActorSystem, executionContext: ExecutionContext, materializer: Materializer)
+                                                           (implicit system: ActorSystem, executionContext: ExecutionContext)
   extends AbstractPersistentEntityRegistry(system) {
   lazy val journalTable: Future[TableDescription] = {
     if (isTablesAutoCreate) createJournalTable(journalTableName)
@@ -27,8 +27,9 @@ private[lagom] final class DynamoDBPersistentEntityRegistry(dynamoClient: Dynamo
   }
 
   validateDynamoPersistenceConfig(system)
-  journalTable.onSuccess {
-    case _ => if (isTablesAutoCreate) createSnapshotStoreTable(snapshotTableName(system)).recoverWith(logAndTerminate)
+  journalTable.onComplete {
+    case Success(_) => if (isTablesAutoCreate) createSnapshotStoreTable(snapshotTableName(system)).recoverWith(logAndTerminate)
+    case Failure(_) => logAndTerminate(_)
   }
 
   override protected val queryPluginId = Some(DynamoDBReadJournal.Identifier)

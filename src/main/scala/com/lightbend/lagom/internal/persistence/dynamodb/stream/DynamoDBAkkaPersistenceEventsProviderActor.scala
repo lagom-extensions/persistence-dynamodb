@@ -20,9 +20,10 @@ import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder
 import com.amazonaws.services.dynamodbv2.model.TableDescription
 import com.amazonaws.services.dynamodbv2.streamsadapter.AmazonDynamoDBStreamsAdapterClient
-import com.amazonaws.services.dynamodbv2.{AmazonDynamoDB, AmazonDynamoDBStreams, AmazonDynamoDBStreamsClientBuilder}
+import com.amazonaws.services.dynamodbv2.{AmazonDynamoDBStreams, AmazonDynamoDBStreamsClientBuilder}
 import com.amazonaws.services.kinesis.clientlibrary.interfaces.{IRecordProcessor, IRecordProcessorFactory}
 import com.amazonaws.services.kinesis.clientlibrary.lib.worker.{InitialPositionInStream, KinesisClientLibConfiguration, Worker}
+import com.github.ghik.silencer.silent
 import com.lightbend.lagom.internal.persistence.dynamodb.DynamoDBPersistenceConfig
 import com.lightbend.lagom.internal.persistence.dynamodb.DynamoDBPersistenceConfig._
 
@@ -67,6 +68,7 @@ private[lagom] class DynamoDBAkkaPersistenceEventsProviderActor(journalTable: Ta
       tagConsumers.put(tag, TagByOffsetConsumerActor(tag, offset, context.system.asInstanceOf[ExtendedActorSystem].provider.resolveActorRef(consumerActorSerializedPath)))
   }
 
+  @silent
   private[stream] def matchByOffset(fromOffset: Offset, recordOffset: Offset): Boolean = {
     true // AWS not valid sequence generation see https://github.com/aws/aws-sdk-java/issues/1798
     //    (fromOffset, recordOffset) match {
@@ -84,14 +86,16 @@ private[lagom] class DynamoDBAkkaPersistenceEventsProviderActor(journalTable: Ta
     val consumerActor = tagByOffsetConsumerActor.actorRef
     (consumerActor ask PublishEventMsg(recordData.offset, recordData.persistenceId, recordData.sequenceNr, recordData.serializedTaggedEventBytes))
       .map(
-        _ => tagConsumers.update(tagByOffsetConsumerActor.tag, TagByOffsetConsumerActor(tagByOffsetConsumerActor.tag, Some(processingRecordOffset), tagByOffsetConsumerActor.actorRef))
+        _ =>
+          tagConsumers
+            .update(tagByOffsetConsumerActor.tag, TagByOffsetConsumerActor(tagByOffsetConsumerActor.tag, Some(processingRecordOffset), tagByOffsetConsumerActor.actorRef))
       )
       .map(_ => Done)
   }
 
   private[stream] def getConsumerActorByEventTag(tag: String): Option[TagByOffsetConsumerActor] = tagConsumers.get(tag)
 
-  private def startStreaming: Unit = {
+  private def startStreaming(): Unit = {
     val actualJournalTableName = journalTable.getTableName
     val streamARN = journalTable.getLatestStreamArn
     require(
@@ -121,7 +125,6 @@ private[lagom] class DynamoDBAkkaPersistenceEventsProviderActor(journalTable: Ta
       new Worker.Builder()
         .recordProcessorFactory(
           new DynamoDBStreamActorEventsRecordProcessorFactory(
-            dynamo.dynamoDB,
             SerializationExtension(context.system),
             system,
             DynamoDBAkkaPersistenceEventsProviderActor.this
@@ -139,10 +142,8 @@ private[lagom] class DynamoDBAkkaPersistenceEventsProviderActor(journalTable: Ta
         )
         .build()
     )
-    workerThread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-      override def uncaughtException(t: Thread, ex: Throwable): Unit = {
-        log.error(s"Exception on working with DynamoDB streaming. Exception: ${ex.getMessage}")
-      }
+    workerThread.setUncaughtExceptionHandler((_: Thread, ex: Throwable) => {
+      log.error(s"Exception on working with DynamoDB streaming. Exception: ${ex.getMessage}")
     })
     workerThread.start()
   }
@@ -154,6 +155,7 @@ private[lagom] object DynamoDBAkkaPersistenceEventsProviderActor {
   def props(journalTable: TableDescription): Props = Props(new DynamoDBAkkaPersistenceEventsProviderActor(journalTable))
   val name = "dynamo-db-events-provider"
 
+  @silent
   def eventsByTag(tag: String, offset: Offset)(implicit actorSystem: ActorSystem): Source[EventEnvelope, NotUsed] = {
     Source
       .actorPublisher[EventEnvelope](DynamoDBEventPublisher.props())
@@ -179,6 +181,7 @@ private[lagom] object DynamoDBAkkaPersistenceEventsProviderActor {
     )
 }
 
+@silent
 private[lagom] class DynamoDBEventPublisher extends ActorPublisher[EventEnvelope] with ActorLogging {
   private val serializer = SerializationExtension(context.system)
   override def receive: Receive = {
@@ -192,11 +195,10 @@ private[lagom] object DynamoDBEventPublisher {
 }
 
 private class DynamoDBStreamActorEventsRecordProcessorFactory(
-                                                               dynamoDBClient: AmazonDynamoDB,
                                                                serializer: Serialization,
                                                                system: ActorSystem,
                                                                eventsProvider: DynamoDBAkkaPersistenceEventsProviderActor
                                                              ) extends IRecordProcessorFactory {
   override def createProcessor: IRecordProcessor =
-    new DynamoDBStreamActorEventsRecordProcessor(dynamoDBClient, serializer, system, eventsProvider)
+    new DynamoDBStreamActorEventsRecordProcessor(serializer, system, eventsProvider)
 }

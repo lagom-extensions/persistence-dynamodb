@@ -7,7 +7,7 @@ import com.gu.scanamo.ops.ScanamoOps
 import com.lightbend.lagom.dynamodb.DynamoDBReadSide.ReadSideHandlerBuilder
 import com.lightbend.lagom.internal.persistence.dynamodb.DynamoDBOffsetStore
 import com.lightbend.lagom.scaladsl.persistence.ReadSideProcessor.ReadSideHandler
-import com.lightbend.lagom.scaladsl.persistence.{AggregateEvent, AggregateEventTag, EventStreamElement}
+import com.lightbend.lagom.scaladsl.persistence.{AggregateEvent, AggregateEventTag, AggregateEventTagger, EventStreamElement}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
@@ -28,7 +28,7 @@ private[lagom] final class DynamoDBReadSideImpl(system: ActorSystem,
 
       import DynamoDBAutoReadSideHandler.Handler
 
-      private var prepareCallback: AggregateEventTag[Event] => Future[Done] = tag => Future.successful(Done)
+      private var prepareCallback: AggregateEventTag[Event] => Future[Done] = (_: AggregateEventTagger[Event]) => Future.successful(Done)
       private var globalPrepareCallback: () => Future[Done] = () => Future.successful(Done)
       private var handlers = Map.empty[Class[_ <: Event], Handler[Event]]
 
@@ -48,7 +48,7 @@ private[lagom] final class DynamoDBReadSideImpl(system: ActorSystem,
         this
       }
 
-      override def build(): ReadSideHandler[Event] = {
+      override def build: ReadSideHandler[Event] = {
         new DynamoDBAutoReadSideHandler[Event](dynamoClient, offsetStore, handlers, globalPrepareCallback, prepareCallback, eventProcessorId, dispatcher)
       }
     }

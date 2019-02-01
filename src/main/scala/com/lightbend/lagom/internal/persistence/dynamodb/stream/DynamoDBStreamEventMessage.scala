@@ -1,4 +1,5 @@
 package com.lightbend.lagom.internal.persistence.dynamodb.stream
+
 import akka.persistence.query._
 import com.lightbend.lagom.scaladsl.playjson.{JsonSerializer, JsonSerializerRegistry}
 import play.api.libs.json._

@@ -2,7 +2,7 @@ version: '2.1'
 
 services:
   localstack:
-    image: localstack/localstack
+    image: localstack/localstack:0.8.7
     container_name: localstack
     ports:
       - "4567-4583:4567-4583"
@@ -15,7 +15,12 @@ services:
       - LAMBDA_EXECUTOR=${LAMBDA_EXECUTOR- }
       - KINESIS_ERROR_PROBABILITY=${KINESIS_ERROR_PROBABILITY- }
       - DOCKER_HOST=unix:///var/run/docker.sock
-      - region=us-east-1
+      - region=eu-west-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION}
+      - DEFAULT_REGION=${AWS_REGION}
+      - AWS_CBOR_DISABLE=true
 #    volumes:
 #      - "${TMPDIR:-/tmp/localstack}:/tmp/localstack"
 #      - "/var/run/docker.sock:/var/run/docker.sock"

@@ -36,7 +36,7 @@ trait WriteSideDynamoDBPersistenceComponents extends WriteSidePersistenceCompone
     dynamoClient,
     dynamoDBWriteSideSettings,
     readSideStreamEnabled
-  )(actorSystem, executionContext, materializer)
+  )(actorSystem, executionContext)
 }
 
 /**
@@ -49,11 +49,7 @@ trait ReadSideDynamoDBPersistenceComponents extends ReadSidePersistenceComponent
   lazy val dynamoClient = DynamoClient(settings)(actorSystem, materializer)
   lazy val dynamoDBReadSideSettings: DynamoDBReadSideSettings = new DynamoDBReadSideSettings(actorSystem)
 
-  private[lagom] lazy val dynamoDBOffsetStore: DynamoDBOffsetStore =
-    new ScaladslDynamoDBOffsetStore(actorSystem, dynamoClient, dynamoDBReadSideSettings, readSideConfig)(
-      executionContext,
-      materializer
-    )
+  private[lagom] lazy val dynamoDBOffsetStore: DynamoDBOffsetStore = new ScaladslDynamoDBOffsetStore(actorSystem, dynamoClient, dynamoDBReadSideSettings, readSideConfig)
   lazy val offsetStore: OffsetStore = dynamoDBOffsetStore
   lazy val dynamoDBReadSide: DynamoDBReadSide = new DynamoDBReadSideImpl(actorSystem, dynamoClient, dynamoDBOffsetStore)
 

@@ -27,17 +27,10 @@ trait TestCounterComponents extends LagomServerComponents with DynamoDBPersisten
   persistentEntityRegistry.register(wire[TestCounterEntity])
 }
 
-abstract class TestCounterApplication(context: LagomApplicationContext)
-    extends LagomApplication(context)
-    with TestCounterComponents
-    with AhcWSComponents {}
+abstract class TestCounterApplication(context: LagomApplicationContext) extends LagomApplication(context) with TestCounterComponents with AhcWSComponents {}
 
 class TestCounterLoader extends LagomApplicationLoader {
-  override def load(context: LagomApplicationContext) =
-    new TestCounterApplication(context) with ConfigurationServiceLocatorComponents
-
-  override def loadDevMode(context: LagomApplicationContext) =
-    new TestCounterApplication(context) with LagomDevModeComponents
-
+  override def load(context: LagomApplicationContext) = new TestCounterApplication(context) with ConfigurationServiceLocatorComponents
+  override def loadDevMode(context: LagomApplicationContext) = new TestCounterApplication(context) with LagomDevModeComponents
   override def describeService = Some(readDescriptor[TestCounterService])
 }

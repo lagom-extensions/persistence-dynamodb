@@ -2,31 +2,15 @@ import sbt.Keys.libraryDependencies
 import sbt.file
 
 organization := "com.lightbend.lagom.dynamodb"
-homepage := Some(
-  url("https://github.com/lagom-extensions/persistence-dynamodb")
-)
-scmInfo := Some(
-  ScmInfo(
-    url("https://github.com/lagom-extensions/persistence-dynamodb.git"),
-    "git@github.com:lagom-extensions/persistence-dynamodb.git"
-  )
-)
-developers := List(
-  Developer(
-    "Dmitriy Kuzkin",
-    "Dmitriy Kuzkin",
-    "dmitriy.kuzkin@gmail.com",
-    url("https://github.com/kuzkdmy")
-  )
-)
+homepage := Some(url("https://github.com/lagom-extensions/persistence-dynamodb"))
+scmInfo := Some(ScmInfo(url("https://github.com/lagom-extensions/persistence-dynamodb.git"), "git@github.com:lagom-extensions/persistence-dynamodb.git"))
+developers := List(Developer("Dmitriy Kuzkin", "Dmitriy Kuzkin", "dmitriy.kuzkin@gmail.com", url("https://github.com/kuzkdmy")))
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 publishMavenStyle := true
 
 publishTo := Some(
-  if (isSnapshot.value)
-    Opts.resolver.sonatypeSnapshots
-  else
-    Opts.resolver.sonatypeStaging
+  if (isSnapshot.value) Opts.resolver.sonatypeSnapshots
+  else Opts.resolver.sonatypeStaging
 )
 
 lazy val root = (project in file("."))
@@ -36,6 +20,7 @@ lazy val root = (project in file("."))
       lagomScaladslPersistence,
       lagomScaladslDevMode,
       lagomScaladslTestKit,
+      lagomLogback,
       "com.softwaremill.macwire" %% "macros"                          % "2.2.5" % "provided",
       "com.gu"                   %% "scanamo-alpakka"                 % "1.0.0-M7",
       "com.amazonaws"            % "dynamodb-streams-kinesis-adapter" % "1.4.0",
@@ -46,7 +31,9 @@ lazy val root = (project in file("."))
     )
   )
 
-testOptions in Test += Tests.Setup(() => {
-  System.setProperty("aws.accessKeyId", "dummyAccessKeyId")
-  System.setProperty("aws.secretKey", "dummySecretKey")
-})
+fork in Test := true
+envVars in Test := Map(
+  "AWS_ACCESS_KEY_ID" -> "dummyAccessKeyId",
+  "AWS_SECRET_KEY" -> "dummySecretKey",
+  "AWS_REGION" -> "us-east-1"
+)

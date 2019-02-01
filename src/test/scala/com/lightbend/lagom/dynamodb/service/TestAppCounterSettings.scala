@@ -10,7 +10,7 @@ final class TestAppCounterSettings {
   val TestCounterStateTableName: String =
     appConfig.getString("persistence.dynamodb.table.counter-state.table-name")
   val TestCounterStateReadCapacityUnits: Long =
-    appConfig.getInt("persistence.dynamodb.table.counter-state.read-capacity-units")
+    appConfig.getLong("persistence.dynamodb.table.counter-state.read-capacity-units")
   val TestCounterStateWriteCapacityUnits: Long =
-    appConfig.getInt("persistence.dynamodb.table.counter-state.write-capacity-units")
+    appConfig.getLong("persistence.dynamodb.table.counter-state.write-capacity-units")
 }

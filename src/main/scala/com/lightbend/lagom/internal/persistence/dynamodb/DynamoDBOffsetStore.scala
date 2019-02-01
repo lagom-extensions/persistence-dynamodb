@@ -3,7 +3,6 @@ package com.lightbend.lagom.internal.persistence.dynamodb
 import akka.Done
 import akka.actor.ActorSystem
 import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
-import akka.stream.Materializer
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoClient
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoImplicits._
 import akka.util.Timeout
@@ -25,12 +24,11 @@ private[lagom] abstract class DynamoDBOffsetStore(system: ActorSystem,
                                                   dynamoClient: DynamoClient,
                                                   override val dynamoDBReadSideSettings: DynamoDBReadSideSettings,
                                                   config: ReadSideConfig
-                                                 )(implicit materializer: Materializer) extends OffsetStore with DynamoDBSchema {
+                                                 ) extends OffsetStore with DynamoDBSchema {
 
   import system.dispatcher
 
   override def prepare(eventProcessorId: String, tag: String): Future[DynamoDBOffsetDao] = {
-    implicit val timeout = Timeout(config.globalPrepareTimeout)
     doPrepare(eventProcessorId, tag).map { offset => new DynamoDBOffsetDao(dynamoClient, eventProcessorId, tag, offset, dynamoDBReadSideSettings) }
   }
 

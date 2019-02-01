@@ -1,7 +1,6 @@
 package com.lightbend.lagom.dynamodb.service.dao
 
 import akka.Done
-import akka.stream.Materializer
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoClient
 import akka.stream.alpakka.dynamodb.scaladsl.DynamoImplicits.CreateTable
 import com.amazonaws.services.dynamodbv2.model._
@@ -10,7 +9,7 @@ import com.gu.scanamo.error.DynamoReadError
 import com.gu.scanamo.ops.ScanamoOps
 import com.lightbend.lagom.dynamodb.DynamoDBReadSide
 import com.lightbend.lagom.dynamodb.service._
-import com.lightbend.lagom.scaladsl.persistence.{PersistentEntityRegistry, ReadSideProcessor}
+import com.lightbend.lagom.scaladsl.persistence.ReadSideProcessor
 
 import scala.collection.immutable.Seq
 import scala.concurrent.{ExecutionContext, Future}
@@ -45,10 +44,9 @@ private[lagom] class TestCounterStateRepository(
 private[lagom] class CounterEventProcessor(
     settings: TestAppCounterSettings,
     dynamoClient: DynamoClient,
-    registry: PersistentEntityRegistry,
     readSide: DynamoDBReadSide,
     counterStateRepository: TestCounterStateRepository
-)(implicit executionContext: ExecutionContext, materializer: Materializer)
+)(implicit executionContext: ExecutionContext)
     extends ReadSideProcessor[TestCounterEvent] {
 
   override def aggregateTags = TestCounterEvent.Tag.allTags
@@ -56,7 +54,7 @@ private[lagom] class CounterEventProcessor(
   override def buildHandler = {
     readSide
       .builder[TestCounterEvent]("CounterEntityOffset")
-      .setGlobalPrepare(createTable)
+      .setGlobalPrepare(() => createTable())
       .setEventHandler[TestCounterUpdatedEvent](
         e =>
           counterStateRepository

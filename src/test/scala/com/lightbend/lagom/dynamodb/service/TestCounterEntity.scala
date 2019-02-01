@@ -27,7 +27,8 @@ class TestCounterEntity extends PersistentEntity {
               state.getOrElse(ZERO),
               amount + state.getOrElse(ZERO)
             )
-          ) { evt => ctx.reply(TestCounterState(entityId, evt.nextState))
+          ) { evt =>
+            ctx.reply(TestCounterState(entityId, evt.nextState))
           }
       }
       .onEvent(
@@ -71,12 +72,17 @@ object TestCounterEvent {
   val NumShards = 10
   val Tag = AggregateEventTag.sharded[TestCounterEvent](NumShards)
 }
-case class TestCounterUpdatedEvent(amount: BigDecimal, previousState: BigDecimal, nextState: BigDecimal)
-    extends TestCounterEvent
+case class TestCounterUpdatedEvent(amount: BigDecimal, previousState: BigDecimal, nextState: BigDecimal) extends TestCounterEvent
 object TestCounterUpdatedEvent {
   implicit val format: Format[TestCounterUpdatedEvent] = Json.format
 }
 
 object TestCounterSerializerRegistry extends JsonSerializerRegistry {
-  override def serializers = List(JsonSerializer[TestCounterState], JsonSerializer[TestIncrementCounterCmd], JsonSerializer[TestGetCounterStateCmd], JsonSerializer[TestCounterUpdatedEvent])
+  override def serializers = List(
+    JsonSerializer[BigDecimal],
+    JsonSerializer[TestCounterState],
+    JsonSerializer[TestIncrementCounterCmd],
+    JsonSerializer[TestGetCounterStateCmd],
+    JsonSerializer[TestCounterUpdatedEvent]
+  )
 }
