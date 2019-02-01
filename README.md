@@ -4,9 +4,10 @@
 Main goal to continue evolution as part of Lagom framework and supported by community
 
 ##### Approximate DynamoDB cost
-This is extremely high in payment. We do a check with 4200RPS and got ~ 4300$/month DynamoDB price.
-So if your team think that this is cheaper than Cassandra support or any AWS RDS solution, they are wrong.
-Choice is yours
+This is extremely high in payment. 
+We have done a check with 4200RPS and got ~ 4300$/month DynamoDB price.
+![prices](./docs/DynamoDBPrices.jpg)
+So just a suggestion for AWS, don't use DynamoDB for akka persistence, but can be used as read side db.
 
 ##### Library dependencies used
 - Alpakka DynamoDB
